@@ -11,6 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "outDir": "dist",
+    "rootDir": "src"
   },
   "exclude": [
     "node_modules",
