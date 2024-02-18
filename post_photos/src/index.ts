@@ -25,7 +25,7 @@ const uploadToS3 = async (
   const uniqueId = Math.random().toString(36).substring(7);
   const command = new PutObjectCommand({
     Bucket: "photolio-photos",
-    Key: `${uniqueId}.jpg`,
+    Key: `${uniqueId}.jpeg`,
     Body: Buffer.from(body.imageBase64, "base64"),
   });
   try {
