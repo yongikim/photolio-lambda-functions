@@ -23,8 +23,8 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
   const data = {
     photos: queryResult.Items?.map((item) => {
       return {
-        photoId: item.PhotoId?.S,
-        photoUrl: item.PhotoUrl?.S,
+        id: item.PhotoId?.S,
+        url: item.PhotoUrl?.S,
         albumName: item.AlbumName?.S,
         itemCreatedAt: item.ItemCreatedAt?.N,
       };
