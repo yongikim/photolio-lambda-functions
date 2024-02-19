@@ -19,7 +19,22 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
     ScanIndexForward: false,
   };
   const command = new QueryCommand(params);
-  const data = await client.send(command);
+  const queryResult = await client.send(command);
+  const data = {
+    photos: queryResult.Items?.map((item) => {
+      return {
+        photoId: item.PhotoId?.S,
+        photoUrl: item.PhotoUrl?.S,
+        albumName: item.AlbumName?.S,
+        itemCreatedAt: item.ItemCreatedAt?.N,
+      };
+    }),
+    meta: {
+      total: queryResult.Count,
+      lastEvaluatedKey: queryResult.LastEvaluatedKey,
+      limit: 10,
+    },
+  };
 
   const response = {
     statusCode: 200,
