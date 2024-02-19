@@ -5,6 +5,7 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { APIGatewayEvent, Context } from "aws-lambda";
+import { ulid } from "ulid";
 
 type RequestItem = {
   imageBase64: "string";
@@ -22,7 +23,7 @@ const uploadToS3 = async (
   s3Client: S3Client,
   body: RequestItem
 ): Promise<UploadResult> => {
-  const uniqueId = Math.random().toString(36).substring(7);
+  const uniqueId = ulid();
   const command = new PutObjectCommand({
     Bucket: "photolio-photos",
     Key: `${uniqueId}.jpeg`,
