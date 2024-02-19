@@ -1,6 +1,6 @@
 import {
   DynamoDBClient,
-  QueryCommand,
+  PutItemCommand,
   QueryCommandInput,
 } from "@aws-sdk/client-dynamodb";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
@@ -13,35 +13,37 @@ type RequestItem = {
 };
 
 type UploadResult = {
-  photoId: string;
+  photoId?: string;
   photoUrl?: string;
   photoTitle?: string;
   success: boolean;
 };
 
+const getPhotoUrl = (photoId: string) =>
+  `https://photolio-photos.s3.ap-northeast-1.amazonaws.com/${photoId}.jpeg`;
+
 const uploadToS3 = async (
   s3Client: S3Client,
   body: RequestItem
 ): Promise<UploadResult> => {
-  const uniqueId = ulid();
+  const photoId = ulid();
   const command = new PutObjectCommand({
     Bucket: "photolio-photos",
-    Key: `${uniqueId}.jpeg`,
+    Key: `${photoId}.jpeg`,
     Body: Buffer.from(body.imageBase64, "base64"),
   });
   try {
     await s3Client.send(command);
-    const photoUrl = `s3://photolio-photos/${uniqueId}.jpeg`;
+    const photoUrl = getPhotoUrl(photoId);
     return {
       photoUrl,
-      photoId: uniqueId,
+      photoId,
       photoTitle: body.title,
       success: true,
     };
   } catch (err) {
     console.error(err);
     return {
-      photoId: uniqueId,
       photoTitle: body.title,
       success: false,
     };
@@ -57,23 +59,48 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
     requestBody.map(async (body) => await uploadToS3(s3Client, body))
   );
 
-  // const dynamoClient = new DynamoDBClient();
-  // const params: QueryCommandInput = {
-  //   TableName: process.env.table_name,
-  //   ProjectionExpression: "PhotoId, PhotoUrl, AlbumName, PhotoOrder",
-  //   KeyConditionExpression: "AlbumId = :album_id",
-  //   ExpressionAttributeValues: {
-  //     ":album_id": { S: "all" },
-  //   },
-  //   Limit: 10,
-  //   ScanIndexForward: false,
-  // };
-  // const command = new QueryCommand(params);
-  // const data = await dynamoClient.send(command);
+  const dynamoClient = new DynamoDBClient();
+  const putItemResult = await Promise.all(
+    uploadResult.map(async (photo, i) => {
+      if (!photo.success || !photo.photoId || !photo.photoUrl) return;
+
+      const now = new Date();
+      const itemCreatedAt = Math.floor(now.getTime() / 1000);
+      const command = new PutItemCommand({
+        TableName: process.env.table_name,
+        Item: {
+          AlbumId: { S: "all" },
+          ItemCreatedAt: { N: itemCreatedAt.toString() },
+          PhotoId: { S: photo.photoId },
+          PhotoUrl: { S: photo.photoUrl },
+          PhotoTitle: { S: photo.photoTitle || "" },
+        },
+      });
+      try {
+        await dynamoClient.send(command);
+        return {
+          id: photo.photoId,
+          url: photo.photoUrl,
+          title: photo.photoTitle,
+          success: true,
+        };
+      } catch (err) {
+        console.error(err);
+        return {
+          id: photo.photoId,
+          url: photo.photoUrl,
+          title: photo.photoTitle,
+          success: false,
+        };
+      }
+    })
+  );
 
   const response = {
     statusCode: 200,
-    body: JSON.stringify(uploadResult),
+    body: JSON.stringify({
+      photos: putItemResult,
+    }),
   };
 
   return response;
