@@ -6,6 +6,7 @@ import {
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { APIGatewayEvent, Context } from "aws-lambda";
 import { ulid } from "ulid";
+import sizeOf from "image-size";
 
 type RequestItem = {
   imageBase64: "string";
@@ -16,6 +17,8 @@ type UploadResult = {
   photoId?: string;
   photoUrl?: string;
   photoTitle?: string;
+  width?: number;
+  height?: number;
   success: boolean;
 };
 
@@ -27,11 +30,16 @@ const uploadToS3 = async (
   body: RequestItem
 ): Promise<UploadResult> => {
   const photoId = ulid();
+  const buffer = Buffer.from(
+    body.imageBase64.split(";base64,").pop() || body.imageBase64,
+    "base64"
+  );
   const command = new PutObjectCommand({
     Bucket: "photolio-photos",
     Key: `${photoId}.jpeg`,
-    Body: Buffer.from(body.imageBase64, "base64"),
+    Body: buffer,
   });
+  const { width, height } = sizeOf(buffer);
   try {
     await s3Client.send(command);
     const photoUrl = getPhotoUrl(photoId);
@@ -39,6 +47,8 @@ const uploadToS3 = async (
       photoUrl,
       photoId,
       photoTitle: body.title,
+      width,
+      height,
       success: true,
     };
   } catch (err) {
@@ -62,7 +72,14 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
   const dynamoClient = new DynamoDBClient();
   const putItemResult = await Promise.all(
     uploadResult.map(async (photo, i) => {
-      if (!photo.success || !photo.photoId || !photo.photoUrl) return;
+      if (
+        !photo.success ||
+        !photo.photoId ||
+        !photo.photoUrl ||
+        !photo.width ||
+        !photo.height
+      )
+        return;
 
       const now = new Date();
       const itemCreatedAt = Math.floor(now.getTime() / 1000);
@@ -74,6 +91,8 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
           PhotoId: { S: photo.photoId },
           PhotoUrl: { S: photo.photoUrl },
           PhotoTitle: { S: photo.photoTitle || "" },
+          PhotoWidth: { N: photo.width?.toString() },
+          PhotoHeight: { N: photo.height?.toString() },
         },
       });
       try {
@@ -101,6 +120,11 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
     body: JSON.stringify({
       photos: putItemResult,
     }),
+    headers: {
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+    },
   };
 
   return response;

@@ -10,7 +10,8 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
 
   const params: QueryCommandInput = {
     TableName: process.env.table_name,
-    ProjectionExpression: "PhotoId, PhotoUrl, AlbumName, PhotoOrder",
+    ProjectionExpression:
+      "PhotoId, PhotoUrl, AlbumName, PhotoOrder, PhotoWidth, PhotoHeight",
     KeyConditionExpression: "AlbumId = :album_id",
     ExpressionAttributeValues: {
       ":album_id": { S: "all" },
@@ -27,6 +28,8 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
         url: item.PhotoUrl?.S,
         albumName: item.AlbumName?.S,
         itemCreatedAt: item.ItemCreatedAt?.N,
+        width: item.PhotoWidth?.N,
+        height: item.PhotoHeight?.N,
       };
     }),
     meta: {
@@ -39,6 +42,11 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
   const response = {
     statusCode: 200,
     body: JSON.stringify(data),
+    headers: {
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+    },
   };
 
   return response;
