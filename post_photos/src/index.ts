@@ -64,10 +64,10 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
   const s3Client = new S3Client();
   // Request body will be validated by API Gateway
   const requestBody: RequestItem[] = JSON.parse(event.body || "{}").photos;
-  console.log(event);
   const uploadResult: UploadResult[] = await Promise.all(
     requestBody.map(async (body) => await uploadToS3(s3Client, body))
   );
+  console.table(uploadResult);
 
   const dynamoClient = new DynamoDBClient();
   const putItemResult = await Promise.all(
@@ -79,10 +79,15 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
         !photo.width ||
         !photo.height
       )
-        return;
+        return {
+          id: photo.photoId,
+          url: photo.photoUrl,
+          title: photo.photoTitle,
+          success: false,
+        };
 
       const now = new Date();
-      const itemCreatedAt = Math.floor(now.getTime() / 1000);
+      const itemCreatedAt = now.getTime();
       const command = new PutItemCommand({
         TableName: process.env.table_name,
         Item: {
@@ -96,12 +101,13 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
         },
       });
       try {
-        await dynamoClient.send(command);
+        const result = await dynamoClient.send(command);
+        const success = result.$metadata.httpStatusCode == 200;
         return {
           id: photo.photoId,
           url: photo.photoUrl,
           title: photo.photoTitle,
-          success: true,
+          success,
         };
       } catch (err) {
         console.error(err);
@@ -126,6 +132,8 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
       "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
     },
   };
+
+  console.debug(response);
 
   return response;
 };
