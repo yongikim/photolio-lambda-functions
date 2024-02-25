@@ -7,6 +7,27 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import { APIGatewayEvent, Context } from "aws-lambda";
 
+export const handler = async (event: APIGatewayEvent, context: Context) => {
+  const requestBody: RequestBody = JSON.parse(event.body || "{}");
+
+  const itemKeys = await getItemKeys(requestBody.albumId, requestBody.photoIds);
+  console.log(itemKeys);
+
+  const responseBody = await deleteItems(itemKeys);
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify(responseBody),
+    headers,
+  };
+};
+
+const headers = {
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+};
+
 type RequestBody = {
   albumId: string;
   photoIds: string[];
@@ -49,7 +70,7 @@ const getItemKeys = async (
 
   try {
     const result = await client.send(new QueryCommand(params));
-    if (!result.Items) {
+    if (!result.Items || !result.Items.length) {
       throw new Error("Items not returned from DynamoDB query");
     }
 
@@ -72,15 +93,9 @@ const getItemKeys = async (
   }
 };
 
-export const handler = async (event: APIGatewayEvent, context: Context) => {
+const deleteItems = async (itemKeys: ItemKey[]): Promise<ResponseBody> => {
   const client = new DynamoDBClient();
-
-  const requestBody: RequestBody = JSON.parse(event.body || "{}");
-  const itemKeys = await getItemKeys(requestBody.albumId, requestBody.photoIds);
-
-  console.log(itemKeys);
-
-  const responseBody: ResponseBody = await Promise.all(
+  return await Promise.all(
     itemKeys.map(async (key) => {
       const params: DeleteItemCommandInput = {
         TableName: process.env.table_name,
@@ -103,16 +118,4 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
       }
     })
   );
-
-  const response = {
-    statusCode: 200,
-    body: JSON.stringify(responseBody),
-    headers: {
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
-    },
-  };
-
-  return response;
 };
