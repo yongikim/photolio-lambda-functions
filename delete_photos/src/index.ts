@@ -6,6 +6,7 @@ import {
   QueryCommand,
 } from "@aws-sdk/client-dynamodb";
 import { APIGatewayEvent, Context } from "aws-lambda";
+import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 export const handler = async (event: APIGatewayEvent, context: Context) => {
   const requestBody: RequestBody = JSON.parse(event.body || "{}");
@@ -40,6 +41,7 @@ type ResponseBody = {
 type ItemKey = {
   AlbumId: string;
   ItemCreatedAt: number;
+  PhotoId: string;
 };
 
 const getItemKeys = async (
@@ -81,10 +83,14 @@ const getItemKeys = async (
       if (!item.ItemCreatedAt.N) {
         throw new Error(`${i + 1}th item is missing ItemCreatedAt`);
       }
+      if (!item.PhotoId.S) {
+        throw new Error(`${i + 1}th item is missing PhotoId`);
+      }
 
       return {
         AlbumId: item.AlbumId.S,
         ItemCreatedAt: Number(item.ItemCreatedAt.N),
+        PhotoId: item.PhotoId.S,
       };
     });
   } catch (error) {
@@ -94,7 +100,8 @@ const getItemKeys = async (
 };
 
 const deleteItems = async (itemKeys: ItemKey[]): Promise<ResponseBody> => {
-  const client = new DynamoDBClient();
+  const dynamoDBClient = new DynamoDBClient();
+  const s3Client = new S3Client();
   return await Promise.all(
     itemKeys.map(async (key) => {
       const params: DeleteItemCommandInput = {
@@ -106,7 +113,13 @@ const deleteItems = async (itemKeys: ItemKey[]): Promise<ResponseBody> => {
       };
       const command = new DeleteItemCommand(params);
       try {
-        await client.send(command);
+        await dynamoDBClient.send(command);
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: "photolio-photos",
+            Key: `${key.PhotoId}.jpeg`,
+          })
+        );
         return {
           success: true,
         };
