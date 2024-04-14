@@ -39,6 +39,8 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
     },
   };
 
+  console.info(data.photos);
+
   const response = {
     statusCode: 200,
     body: JSON.stringify(data),

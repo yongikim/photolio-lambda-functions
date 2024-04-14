@@ -70,15 +70,11 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
   console.table(uploadResult);
 
   const dynamoClient = new DynamoDBClient();
+
+  // FIXME: promise.all で created_at が同じになるので、一つずつ登録する
   const putItemResult = await Promise.all(
     uploadResult.map(async (photo, i) => {
-      if (
-        !photo.success ||
-        !photo.photoId ||
-        !photo.photoUrl ||
-        !photo.width ||
-        !photo.height
-      )
+      if (!photo.success || !photo.photoId || !photo.photoUrl)
         return {
           id: photo.photoId,
           url: photo.photoUrl,
@@ -96,10 +92,12 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
           PhotoId: { S: photo.photoId },
           PhotoUrl: { S: photo.photoUrl },
           PhotoTitle: { S: photo.photoTitle || "" },
-          PhotoWidth: { N: photo.width?.toString() },
-          PhotoHeight: { N: photo.height?.toString() },
+          PhotoWidth: { N: photo.width?.toString() || "400" },
+          PhotoHeight: { N: photo.height?.toString() || "300" },
         },
       });
+      // sleep 10ms
+      await new Promise((resolve) => setTimeout(resolve, 10));
       try {
         const result = await dynamoClient.send(command);
         const success = result.$metadata.httpStatusCode == 200;
@@ -129,7 +127,7 @@ export const handler = async (event: APIGatewayEvent, context: Context) => {
     headers: {
       "Access-Control-Allow-Headers": "Content-Type",
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+      "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE",
     },
   };
 
